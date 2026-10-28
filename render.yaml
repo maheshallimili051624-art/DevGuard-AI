@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: devguard-ai-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: OLLAMA_URL
+        value: http://localhost:11434
+      - key: OLLAMA_MODEL
+        value: gemma4:e2b
+      - key: DEVGUARD_DB_PATH
+        value: devguard.db

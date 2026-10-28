@@ -30,6 +30,8 @@ from app.services.error_explainer import explain_error
 from app.services.git_review import analyze_git_diff
 from app.services.report_exporter import export_markdown_report, export_json_report, export_sarif_report
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # Initialize database schema
 init_db()
 
@@ -37,6 +39,14 @@ app = FastAPI(
     title="DevGuard AI",
     version="2.0.0",
     description="Advanced Local-First AI Code Security & Quality Platform powered by Ollama."
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 if STATIC_DIR.exists():

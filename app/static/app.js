@@ -1,4 +1,14 @@
 // DevGuard AI — Frontend Application Controller
+// Intercept fetch for cross-origin deployments (e.g. Vercel frontend -> Render backend)
+const originalFetch = window.fetch;
+window.fetch = function(url, options) {
+  const base = (localStorage.getItem('devguard_api_base') || '').replace(/\/+$/, '');
+  if (base && typeof url === 'string' && url.startsWith('/api')) {
+    url = base + url;
+  }
+  return originalFetch(url, options);
+};
+
 const app = {
   currentScan: null,
   allFindings: [],
@@ -663,10 +673,15 @@ ${data.missing_tests.map(t => `• ${t}`).join('\n')}
       this.toast('Please choose a scan first', 'bad');
       return;
     }
-    window.location.href = `/api/scans/${scanId}/report?format=${format}`;
+    const base = (localStorage.getItem('devguard_api_base') || '').replace(/\/+$/, '');
+    window.location.href = `${base}/api/scans/${scanId}/report?format=${format}`;
   },
 
   async loadSettings() {
+    const backendInput = document.getElementById('cfgBackendUrl');
+    if (backendInput) {
+      backendInput.value = localStorage.getItem('devguard_api_base') || '';
+    }
     try {
       const res = await fetch('/api/settings');
       const data = await res.json();
@@ -682,6 +697,15 @@ ${data.missing_tests.map(t => `• ${t}`).join('\n')}
   async saveSettings() {
     const btn = document.getElementById('saveSettingsBtn');
     btn.disabled = true;
+    const backendInput = document.getElementById('cfgBackendUrl');
+    if (backendInput) {
+      const customApi = backendInput.value.trim().replace(/\/+$/, '');
+      if (customApi) {
+        localStorage.setItem('devguard_api_base', customApi);
+      } else {
+        localStorage.removeItem('devguard_api_base');
+      }
+    }
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',

@@ -575,7 +575,15 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="cfgOllamaUrl">Local Ollama Endpoint</label>
+            <label class="form-label" for="cfgBackendUrl">Backend API URL (Render / Cloud)</label>
+            <input type="text" id="cfgBackendUrl" class="form-input" placeholder="e.g. https://devguard-ai.onrender.com (leave empty for same origin)">
+            <span style="font-size:11.5px;color:var(--text-dim);display:block;margin-top:4px">
+              Used when deploying the frontend separately on Vercel. Points all API requests to your Render backend.
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cfgOllamaUrl">Local / Remote Ollama Endpoint</label>
             <input type="text" id="cfgOllamaUrl" class="form-input" value="http://localhost:11434">
           </div>
 
