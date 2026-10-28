@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevGuard AI — Advanced Local-First AI Code Security Platform</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app-layout">
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">D</div>
+      <div>
+        <div class="brand-title">DevGuard AI</div>
+        <div class="brand-sub">Local Security Suite</div>
+      </div>
+    </div>
+    <nav class="nav-menu" id="navMenu">
+      <a class="nav-item active" data-tab="dashboard">
+        <span class="nav-icon">📊</span><span class="nav-text">Dashboard</span>
+      </a>
+      <a class="nav-item" data-tab="review">
+        <span class="nav-icon">🔍</span><span class="nav-text">Code Review</span>
+      </a>
+      <a class="nav-item" data-tab="repo">
+        <span class="nav-icon">📦</span><span class="nav-text">Repository Scanner</span>
+      </a>
+      <a class="nav-item" data-tab="findings">
+        <span class="nav-icon">🛡️</span><span class="nav-text">Security Findings</span>
+      </a>
+      <a class="nav-item" data-tab="error">
+        <span class="nav-icon">⚡</span><span class="nav-text">Error Explainer</span>
+      </a>
+      <a class="nav-item" data-tab="git">
+        <span class="nav-icon">🌿</span><span class="nav-text">Git Diff Review</span>
+      </a>
+      <a class="nav-item" data-tab="deps">
+        <span class="nav-icon">🔗</span><span class="nav-text">Dependency Scanner</span>
+      </a>
+      <a class="nav-item" data-tab="history">
+        <span class="nav-icon">📜</span><span class="nav-text">Scan History</span>
+      </a>
+      <a class="nav-item" data-tab="reports">
+        <span class="nav-icon">📄</span><span class="nav-text">Reports</span>
+      </a>
+      <a class="nav-item" data-tab="settings">
+        <span class="nav-icon">⚙️</span><span class="nav-text">Settings</span>
+      </a>
+    </nav>
+    <div class="sidebar-status">
+      <div class="status-pill">
+        <span class="status-dot disconnected" id="ollamaStatusDot"></span>
+        <span id="ollamaStatusText">Checking Ollama…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-wrapper">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title" id="pageTitle">Security Dashboard</h1>
+      </div>
+      <div class="topbar-right">
+        <div class="model-select-wrapper">
+          <span>Active Model:</span>
+          <select id="globalModelSelect" class="model-select" title="Active Ollama Model">
+            <option value="gemma4:e2b">gemma4:e2b</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <div class="content-area">
+
+      <!-- TAB 1: DASHBOARD -->
+      <section class="tab-pane active" id="pane-dashboard">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Scans</div>
+            <div class="stat-val" id="dashTotalScans">0</div>
+            <div class="stat-sub">Historical evaluations</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Critical Findings</div>
+            <div class="stat-val" style="color:var(--red-500)" id="dashCritCount">0</div>
+            <div class="stat-sub">Immediate action required</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">High Severity</div>
+            <div class="stat-val" style="color:var(--orange-500)" id="dashHighCount">0</div>
+            <div class="stat-sub">Severe risk indicators</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Medium & Low</div>
+            <div class="stat-val" style="color:var(--yellow-500)" id="dashMedLowCount">0</div>
+            <div class="stat-sub">Hardening opportunities</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg Risk Score</div>
+            <div class="stat-val" style="color:var(--teal-400)" id="dashAvgRisk">0/100</div>
+            <div class="stat-sub">Static heuristic index</div>
+          </div>
+        </div>
+
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Recent Security Scans</h2>
+                <p class="panel-desc">Latest evaluations recorded in local SQLite database.</p>
+              </div>
+              <button class="btn btn-secondary" onclick="app.switchTab('history')">View All</button>
+            </div>
+            <div id="dashRecentScansList">
+              <p style="color:var(--text-muted);font-size:13px">Loading scan history…</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">System Status & Environment</h2>
+                <p class="panel-desc">Local Ollama inference and rule engine telemetry.</p>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-subtle);padding-bottom:8px">
+                <span style="color:var(--text-muted)">Ollama Host</span>
+                <span style="font-family:var(--font-mono)" id="dashOllamaEndpoint">http://localhost:11434</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-subtle);padding-bottom:8px">
+                <span style="color:var(--text-muted)">Inference Model</span>
+                <span style="font-family:var(--font-mono)" id="dashActiveModel">gemma4:e2b</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-subtle);padding-bottom:8px">
+                <span style="color:var(--text-muted)">Analysis Engine</span>
+                <span style="color:var(--teal-400);font-weight:700">Python AST + Deterministic Rules</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-subtle);padding-bottom:8px">
+                <span style="color:var(--text-muted)">OWASP Compliance</span>
+                <span>Top 10 (2021) & API Top 10 (2023)</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding-bottom:4px">
+                <span style="color:var(--text-muted)">Privacy Mode</span>
+                <span style="color:var(--teal-400)">100% Localhost Execution</span>
+              </div>
+            </div>
+            <div style="margin-top:16px;background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);padding:12px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-muted)">
+              💡 <strong>Developer Note:</strong> DevGuard AI runs completely on your machine. No source code or secrets are ever sent to external cloud APIs.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: CODE REVIEW -->
+      <section class="tab-pane" id="pane-review">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Analyze Code Snippet</h2>
+                <p class="panel-desc">Run deep AST analysis, deterministic checks, and local Ollama reasoning.</p>
+              </div>
+              <button class="btn btn-secondary" id="loadSampleSnippetBtn">Load Vulnerable Sample</button>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="reviewLang">Target Language</label>
+                <select id="reviewLang" class="form-select">
+                  <option value="auto">auto-detect</option>
+                  <option value="Python">Python</option>
+                  <option value="JavaScript">JavaScript</option>
+                  <option value="TypeScript">TypeScript</option>
+                  <option value="Java">Java</option>
+                  <option value="C/C++">C / C++</option>
+                  <option value="Go">Go</option>
+                  <option value="Rust">Rust</option>
+                  <option value="PHP">PHP</option>
+                  <option value="SQL">SQL</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reviewType">Analysis Type</label>
+                <select id="reviewType" class="form-select">
+                  <option value="security">Security & Vulnerabilities</option>
+                  <option value="bugs">Potential Bugs & Logic</option>
+                  <option value="quality">Code Quality & Style</option>
+                  <option value="performance">Performance & Concurrency</option>
+                  <option value="full_review">Full 360° Review</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reviewDepth">Review Depth</label>
+                <select id="reviewDepth" class="form-select">
+                  <option value="standard">Standard</option>
+                  <option value="quick">Quick Scan</option>
+                  <option value="deep">Deep Dive</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="reviewPrompt">Custom Audit Instructions (Optional)</label>
+              <input id="reviewPrompt" class="form-input" placeholder="e.g. Focus on input validation and database queries" value="Review for likely bugs, security risks, and maintainability issues.">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="reviewCodeInput">Source Code</label>
+              <textarea id="reviewCodeInput" class="form-textarea" placeholder="Paste source code here..." rows="12"></textarea>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+              <span style="font-size:12px;color:var(--text-dim)">Secrets are automatically redacted before sending to model.</span>
+              <button class="btn btn-primary" id="startReviewBtn">⚡ Run AI Review</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Review Report & Findings</h2>
+                <p class="panel-desc" id="reviewReportMeta">Awaiting code submission.</p>
+              </div>
+            </div>
+            <div id="reviewOutputSection">
+              <div class="ai-output-box" id="reviewOutputBox">Paste or load a code sample, then click "Run AI Review" to start local analysis.</div>
+              <h3 style="font-size:14px;font-weight:800;margin:18px 0 10px">Detected Findings (<span id="reviewFindingsCount">0</span>)</h3>
+              <div class="findings-container" id="reviewFindingsList">
+                <div style="color:var(--text-dim);font-size:13px">No findings yet.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: REPOSITORY SCANNER -->
+      <section class="tab-pane" id="pane-repo">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Repository & Project Scan</h2>
+                <p class="panel-desc">Analyze entire projects via ZIP upload or safe local directory path.</p>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-bottom:16px">
+              <button class="btn btn-primary" id="repoModeZipBtn" onclick="app.setRepoMode('zip')">ZIP Archive Upload</button>
+              <button class="btn btn-secondary" id="repoModeLocalBtn" onclick="app.setRepoMode('local')">Local Directory Path</button>
+            </div>
+
+            <!-- ZIP form -->
+            <div id="repoZipSection">
+              <div class="form-group">
+                <label class="form-label" for="repoZipInput">Select Project ZIP Archive</label>
+                <input type="file" id="repoZipInput" accept=".zip,application/zip" class="form-input">
+                <span style="font-size:11.5px;color:var(--text-dim);display:block;margin-top:4px">
+                  Max upload limit: 10 MB. Skips node_modules, .git, venv, and secret files automatically.
+                </span>
+              </div>
+            </div>
+
+            <!-- Local directory form -->
+            <div id="repoLocalSection" style="display:none">
+              <div class="form-group">
+                <label class="form-label" for="repoLocalPathInput">Local Directory Absolute Path</label>
+                <input type="text" id="repoLocalPathInput" class="form-input" placeholder="e.g. C:\Users\Username\Projects\my-app">
+                <span style="font-size:11.5px;color:var(--text-dim);display:block;margin-top:4px">
+                  Path is safely scanned in place without copying outside bounds.
+                </span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="repoQuestionInput">Review Focus / Question</label>
+              <input type="text" id="repoQuestionInput" class="form-input" value="Summarize the project architecture, detect security vulnerabilities, and outline actionable remediation steps.">
+            </div>
+
+            <button class="btn btn-primary" id="startRepoScanBtn" style="width:100%">🚀 Start Repository Scan</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Repository Results & Inventory</h2>
+                <p class="panel-desc" id="repoResultsMeta">Ready to scan.</p>
+              </div>
+            </div>
+
+            <div class="ai-output-box" id="repoOutputBox">Repository analysis report will appear here.</div>
+
+            <div style="margin-top:16px">
+              <h3 style="font-size:13.5px;font-weight:800;margin-bottom:8px">Inventory Details</h3>
+              <div style="display:flex;gap:20px;font-size:12.5px;margin-bottom:10px">
+                <div>Scanned Files: <strong id="repoScannedCount" style="color:var(--teal-400)">0</strong></div>
+                <div>Skipped Files: <strong id="repoSkippedCount" style="color:var(--orange-500)">0</strong></div>
+              </div>
+              <div id="repoFilesDetails" style="font-size:11.5px;font-family:var(--font-mono);color:var(--text-muted);max-height:120px;overflow-y:auto;background:var(--bg-input);padding:8px;border-radius:4px">
+                No files evaluated yet.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: SECURITY FINDINGS -->
+      <section class="tab-pane" id="pane-findings">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Security & Quality Findings Explorer</h2>
+              <p class="panel-desc">Interactive filterable view of all detected issues from the latest scan.</p>
+            </div>
+            <div style="display:flex;gap:10px">
+              <input type="text" id="findingSearchInput" class="form-input" placeholder="Search title, file, or CWE…" style="width:220px">
+              <select id="findingSeverityFilter" class="form-select" style="width:140px">
+                <option value="all">All Severities</option>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+                <option value="Info">Info</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="findings-container" id="allFindingsList">
+            <div style="color:var(--text-dim);padding:20px;text-align:center">No findings loaded yet. Run a code review or repository scan.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: ERROR EXPLAINER -->
+      <section class="tab-pane" id="pane-error">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Debug & Error Explainer</h2>
+                <p class="panel-desc">Get clear root-cause explanations, debugging steps, and fix proposals for errors.</p>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="errLang">Language</label>
+                <select id="errLang" class="form-select">
+                  <option value="auto">auto-detect</option>
+                  <option value="Python">Python</option>
+                  <option value="JavaScript">JavaScript / TypeScript</option>
+                  <option value="Java">Java</option>
+                  <option value="Go">Go</option>
+                  <option value="C/C++">C / C++</option>
+                  <option value="SQL">SQL</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="errExperience">Target Audience Level</label>
+                <select id="errExperience" class="form-select">
+                  <option value="intermediate">Intermediate Developer</option>
+                  <option value="beginner">Beginner (Step-by-step analogies)</option>
+                  <option value="advanced">Advanced (Deep internals)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="errMessageInput">Error Message</label>
+              <textarea id="errMessageInput" class="form-textarea" rows="3" placeholder="e.g. TypeError: Cannot read properties of undefined (reading 'map')"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="errStackInput">Stack Trace (Optional)</label>
+              <textarea id="errStackInput" class="form-textarea" rows="4" placeholder="Paste full stack trace…"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="errCodeInput">Related Source Code (Optional)</label>
+              <textarea id="errCodeInput" class="form-textarea" rows="4" placeholder="Paste code around the error line…"></textarea>
+            </div>
+
+            <button class="btn btn-primary" id="explainErrorBtn" style="width:100%">⚡ Explain Error & Suggest Fixes</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Explanation & Remediation Plan</h2>
+                <p class="panel-desc">Structured root-cause analysis and verification guidance.</p>
+              </div>
+              <button class="btn btn-secondary" id="copyErrorExplanationBtn">📋 Copy Explanation</button>
+            </div>
+
+            <div class="ai-output-box" id="errorExplanationOutput">
+              Submit an error message and code to receive an in-depth breakdown.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: GIT DIFF REVIEW -->
+      <section class="tab-pane" id="pane-git">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Git Diff Security Review</h2>
+                <p class="panel-desc">Review uncommitted changes or branch diffs before committing.</p>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="gitRepoPath">Git Repository Path on Disk</label>
+              <input type="text" id="gitRepoPath" class="form-input" placeholder="e.g. C:\Users\Username\Projects\my-git-repo">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="gitBaseRef">Base Reference</label>
+                <input type="text" id="gitBaseRef" class="form-input" value="HEAD~1">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="gitTargetRef">Target Reference (Optional)</label>
+                <input type="text" id="gitTargetRef" class="form-input" placeholder="e.g. HEAD or feature-branch">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" id="runGitReviewBtn" style="width:100%">🌿 Inspect Git Diff</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Git Diff Analysis</h2>
+                <p class="panel-desc" id="gitMetaDesc">Awaiting Git inspection.</p>
+              </div>
+            </div>
+            <div class="ai-output-box" id="gitDiffOutput">
+              Select a repository to inspect changed files and potential regressions.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 7: DEPENDENCY SCANNER -->
+      <section class="tab-pane" id="pane-deps">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Dependency Security Analysis</h2>
+                <p class="panel-desc">Audit dependencies without executing package code.</p>
+              </div>
+              <button class="btn btn-secondary" id="loadSampleDepsBtn">Load Sample Manifest</button>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="depManifestType">Manifest Format</label>
+              <select id="depManifestType" class="form-select">
+                <option value="auto">auto-detect</option>
+                <option value="requirements.txt">requirements.txt (Python)</option>
+                <option value="package.json">package.json (Node.js)</option>
+                <option value="pyproject.toml">pyproject.toml (Python)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="depContentInput">Manifest File Content</label>
+              <textarea id="depContentInput" class="form-textarea" rows="10" placeholder="Paste requirements.txt or package.json here…"></textarea>
+            </div>
+
+            <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:10px">
+              <input type="checkbox" id="depOnlineToggle" style="width:auto">
+              <label for="depOnlineToggle" style="font-size:12.5px;color:var(--text-muted);cursor:pointer">
+                <strong>Enable Online Advisory Lookup (OSV Database)</strong>
+                <span style="display:block;font-size:11px;color:var(--text-dim)">
+                  Network disclosure: Queries api.osv.dev using only package names and versions.
+                </span>
+              </label>
+            </div>
+
+            <button class="btn btn-primary" id="scanDepsBtn" style="width:100%;margin-top:10px">🔍 Audit Dependencies</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Dependency Vulnerabilities</h2>
+                <p class="panel-desc" id="depResultsMeta">No manifest scanned yet.</p>
+              </div>
+            </div>
+
+            <div id="depResultsContainer">
+              <div style="color:var(--text-dim);font-size:13px">Scan dependencies to see parsed packages and advisories.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 8: SCAN HISTORY -->
+      <section class="tab-pane" id="pane-history">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Persistent Scan History</h2>
+              <p class="panel-desc">All past evaluations stored safely in local SQLite database.</p>
+            </div>
+            <div style="display:flex;gap:10px">
+              <input type="text" id="historySearchInput" class="form-input" placeholder="Search past scans…" style="width:200px">
+              <button class="btn btn-secondary" id="refreshHistoryBtn">🔄 Refresh</button>
+            </div>
+          </div>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Scan ID</th>
+                <th>Project Name</th>
+                <th>Timestamp</th>
+                <th>Model</th>
+                <th>Findings</th>
+                <th>Risk Score</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-dim)">Loading scan records…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 9: REPORTS -->
+      <section class="tab-pane" id="pane-reports">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Compliance & Security Reports</h2>
+              <p class="panel-desc">Export scan findings in standard formats (Markdown, JSON, OASIS SARIF 2.1.0).</p>
+            </div>
+          </div>
+
+          <div class="form-group" style="max-width:400px">
+            <label class="form-label" for="reportScanSelect">Choose Completed Scan</label>
+            <select id="reportScanSelect" class="form-select">
+              <option value="">Select a scan…</option>
+            </select>
+          </div>
+
+          <div style="display:flex;gap:12px;margin:20px 0">
+            <button class="btn btn-primary" id="exportMarkdownBtn">📥 Export Markdown (.md)</button>
+            <button class="btn btn-secondary" id="exportJsonBtn">📥 Export JSON (.json)</button>
+            <button class="btn btn-secondary" id="exportSarifBtn">🛡️ Export SARIF 2.1.0 (.sarif)</button>
+          </div>
+
+          <div class="panel-desc" style="line-height:1.6">
+            <strong>SARIF (Static Analysis Results Interchange Format):</strong> Standardized by OASIS for automated ingestion into GitHub Advanced Security, VS Code SARIF Viewer, and CI/CD security pipelines without proprietary lock-in.
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 10: SETTINGS -->
+      <section class="tab-pane" id="pane-settings">
+        <div class="panel" style="max-width:700px">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">DevGuard AI Configuration</h2>
+              <p class="panel-desc">Manage local Ollama endpoints, default models, timeouts, and rules.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cfgOllamaUrl">Local Ollama Endpoint</label>
+            <input type="text" id="cfgOllamaUrl" class="form-input" value="http://localhost:11434">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cfgDefaultModel">Default Model Name</label>
+            <input type="text" id="cfgDefaultModel" class="form-input" value="gemma4:e2b">
+            <span style="font-size:11.5px;color:var(--text-dim);display:block;margin-top:4px">
+              Must match a model in <code>ollama list</code>. Default: <code>gemma4:e2b</code>.
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cfgTimeout">Model Inference Timeout (seconds)</label>
+            <input type="number" id="cfgTimeout" class="form-input" value="180" min="10" max="600">
+          </div>
+
+          <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:14px">
+            <input type="checkbox" id="cfgOnlineDepToggle" style="width:auto">
+            <label for="cfgOnlineDepToggle" style="font-size:13px;color:var(--text-muted);cursor:pointer">
+              Enable Online Dependency Vulnerability Checks (OSV API) by default
+            </label>
+          </div>
+
+          <div style="margin-top:24px">
+            <button class="btn btn-primary" id="saveSettingsBtn">💾 Save Configuration</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- Finding Details Modal -->
+<div class="modal-overlay" id="findingModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 style="font-size:16px;font-weight:800" id="modalFindingTitle">Finding Details</h3>
+      <button class="btn btn-secondary" onclick="app.closeModal('findingModal')" style="padding:4px 10px">&times;</button>
+    </div>
+    <div class="modal-body" id="modalFindingBody">
+      <!-- Dynamic content -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="app.closeModal('findingModal')">Close</button>
+      <button class="btn btn-primary" id="modalGenerateFixBtn">⚡ Generate AI Fix</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fix Preview Modal -->
+<div class="modal-overlay" id="fixPreviewModal">
+  <div class="modal-dialog" style="max-width:850px">
+    <div class="modal-header">
+      <h3 style="font-size:16px;font-weight:800">AI Fix Preview & Unified Diff</h3>
+      <button class="btn btn-secondary" onclick="app.closeModal('fixPreviewModal')" style="padding:4px 10px">&times;</button>
+    </div>
+    <div class="modal-body" id="fixPreviewModalBody">
+      <!-- Dynamic patch preview -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="copySuggestedFixBtn">📋 Copy Fix</button>
+      <button class="btn btn-secondary" onclick="app.closeModal('fixPreviewModal')">Cancel</button>
+      <button class="btn btn-primary" id="applyPatchBtn" style="display:none">Apply Patch to Disk</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
