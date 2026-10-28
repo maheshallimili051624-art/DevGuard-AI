@@ -1,17 +1,4 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/static/:path*",
-      "destination": "/app/static/:path*"
-    },
-    {
-      "source": "/",
-      "destination": "/app/static/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/app/static/$1"
-    }
-  ]
+  "outputDirectory": "app/static",
+  "cleanUrls": true
 }
