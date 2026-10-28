@@ -6,15 +6,28 @@ APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 DATABASE_PATH = os.getenv("DEVGUARD_DB_PATH", str(BASE_DIR / "devguard.db"))
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e2b")
+# Ollama Mode: "local" (localhost:11434) or "cloud" (https://ollama.com with Bearer API key)
+OLLAMA_MODE = os.getenv("OLLAMA_MODE", "local").strip().lower()
+
+default_url = "https://ollama.com" if OLLAMA_MODE == "cloud" else "http://localhost:11434"
+OLLAMA_URL = os.getenv("OLLAMA_URL", default_url).strip().rstrip("/")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
+
+# Default cloud model vs default local model
+default_model = "gemma4:31b" if OLLAMA_MODE == "cloud" else "gemma4:e2b"
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", default_model).strip()
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))
+
+# Production & Public Website Security Settings
+IS_PUBLIC_MODE = os.getenv("DEVGUARD_PUBLIC_MODE", "false").strip().lower() in ("true", "1", "yes")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
+RATE_LIMIT_PER_MINUTE = int(os.getenv("DEVGUARD_RATE_LIMIT", "30"))
 
 # Analysis and archive constraints
 MAX_UPLOAD_MB = int(os.getenv("DEVGUARD_MAX_UPLOAD_MB", "10"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 MAX_FILE_BYTES = int(os.getenv("DEVGUARD_MAX_FILE_BYTES", "200000"))
-MAX_FILES = int(os.getenv("DEVGUARD_MAX_FILES", "100"))
+MAX_FILES = int(os.getenv("DEVGUARD_MAX_FILES", "50"))
 MAX_CONTEXT_CHARS = int(os.getenv("DEVGUARD_MAX_CONTEXT_CHARS", "100000"))
 ANALYSIS_TIMEOUT_SECONDS = int(os.getenv("DEVGUARD_ANALYSIS_TIMEOUT", "180"))
 

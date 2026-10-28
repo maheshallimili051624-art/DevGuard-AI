@@ -2,14 +2,24 @@ services:
   - type: web
     name: devguard-ai-backend
     runtime: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.3
+        value: 3.11.0
+      - key: OLLAMA_MODE
+        value: local
       - key: OLLAMA_URL
         value: http://localhost:11434
       - key: OLLAMA_MODEL
         value: gemma4:e2b
       - key: DEVGUARD_DB_PATH
-        value: devguard.db
+        value: /tmp/devguard.db
+      - key: DEVGUARD_PUBLIC_MODE
+        value: "true"
+      - key: DEVGUARD_RATE_LIMIT
+        value: "20"
+      - key: FRONTEND_URL
+        value: "*"

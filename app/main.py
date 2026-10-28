@@ -3,12 +3,16 @@ from typing import Optional, Literal
 import time
 import os
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query, Response
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query, Response, Request
 from fastapi.responses import FileResponse, PlainTextResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from app.config import STATIC_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT
+from app.config import (
+    STATIC_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT,
+    IS_PUBLIC_MODE, FRONTEND_URL, RATE_LIMIT_PER_MINUTE
+)
 from app.database import init_db, list_scans, get_scan, delete_scan, set_setting, get_setting
 from app.schemas import (
     CodeReviewRequest, CodeReviewResponse, FixGenerationRequest, PatchPreview,
@@ -18,9 +22,10 @@ from app.schemas import (
 )
 from app.security_scanner.redaction import scrub_secrets, SECRET_PATTERNS
 from app.security_scanner.rules import local_checks, run_deterministic_rules
+from app.services.rate_limiter import limiter
 from app.services.ollama_client import (
     call_ollama, check_ollama_status, get_configured_model,
-    get_configured_ollama_url, get_configured_timeout
+    get_configured_ollama_url, get_configured_timeout, get_configured_mode
 )
 from app.services.code_review import perform_code_review, calculate_risk_score
 from app.services.repo_scanner import extract_safe_zip, scan_local_directory, analyze_repository_files
@@ -30,24 +35,36 @@ from app.services.error_explainer import explain_error
 from app.services.git_review import analyze_git_diff
 from app.services.report_exporter import export_markdown_report, export_json_report, export_sarif_report
 
-from fastapi.middleware.cors import CORSMiddleware
-
 # Initialize database schema
 init_db()
 
 app = FastAPI(
     title="DevGuard AI",
-    version="2.0.0",
-    description="Advanced Local-First AI Code Security & Quality Platform powered by Ollama."
+    version="2.1.0",
+    description="Advanced Cloud & Local-First AI Code Security Platform."
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS safely based on FRONTEND_URL environment variable
+if FRONTEND_URL and FRONTEND_URL != "*":
+    allowed_origins = [o.strip() for o in FRONTEND_URL.split(",") if o.strip()]
+    for local_origin in ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"]:
+        if local_origin not in allowed_origins:
+            allowed_origins.append(local_origin)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -81,11 +98,15 @@ def health():
 def get_models():
     status_info = check_ollama_status()
     return {
+        "mode": status_info.get("mode", "local"),
+        "ai_provider": status_info.get("ai_provider", "ollama_local"),
         "models": status_info.get("models", []),
         "default_model": get_configured_model(),
         "ollama_url": get_configured_ollama_url(),
         "timeout": get_configured_timeout(),
-        "ollama_status": status_info.get("ollama", "disconnected")
+        "api_key_configured": status_info.get("api_key_configured", False),
+        "ai_reachable": status_info.get("ai_reachable", False),
+        "backend": "running"
     }
 
 
@@ -94,12 +115,13 @@ def get_models():
 # ==========================================
 
 @app.post("/api/analyze")
-def legacy_analyze_code(request: CodeRequest):
-    """Preserves exact legacy endpoint behavior for existing clients."""
-    code, redactions = scrub_secrets(request.code)
+def legacy_analyze_code(request_body: CodeRequest, req: Request):
+    """Preserves exact legacy endpoint behavior with rate limiting."""
+    limiter.check(req)
+    code, redactions = scrub_secrets(request_body.code)
     findings = local_checks(code)
     prompt = (
-        f"Language: {request.language}\nQuestion: {request.question}\n\n"
+        f"Language: {request_body.language}\nQuestion: {request_body.question}\n\n"
         "Review the code below. Use headings: Summary, Findings (severity and line where possible), "
         "Recommended fixes, Tests to run. Be specific, distinguish likely issues from confirmed facts, "
         "and do not invent execution results. Possible secrets have been redacted.\n\n"
@@ -111,14 +133,15 @@ def legacy_analyze_code(request: CodeRequest):
         "findings": findings,
         "secret_redactions": redactions,
         "model": get_configured_model(),
-        "mode": "local Ollama + deterministic checks"
+        "mode": f"{get_configured_mode()} Ollama + deterministic checks"
     }
 
 
 @app.post("/api/review", response_model=CodeReviewResponse)
-def advanced_code_review(request: CodeReviewRequest):
-    """Advanced structured AI code review with full parameters."""
-    return perform_code_review(request)
+def advanced_code_review(review_request: CodeReviewRequest, req: Request):
+    """Advanced structured AI code review with rate limiting and secret redaction."""
+    limiter.check(req)
+    return perform_code_review(review_request)
 
 
 # ==========================================
@@ -127,6 +150,7 @@ def advanced_code_review(request: CodeReviewRequest):
 
 @app.post("/api/analyze-archive")
 async def analyze_archive(
+    req: Request,
     file: UploadFile = File(...),
     question: str = Form("Summarize the project, identify likely bugs/security concerns, and suggest safe next steps."),
     analysis_type: str = Form("security"),
@@ -134,7 +158,8 @@ async def analyze_archive(
     severity_filter: str = Form("all"),
     model_name: Optional[str] = Form(None)
 ):
-    """Processes uploaded ZIP project with safe extraction and bounded Ollama context."""
+    """Processes uploaded ZIP project with safe extraction and bounded context."""
+    limiter.check(req)
     if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Please upload a .zip file containing source code.")
 
@@ -154,7 +179,6 @@ async def analyze_archive(
         model_name=model_name
     )
 
-    # Return compatible format that satisfies both legacy and new frontend
     return {
         "scan_id": resp.scan_id,
         "analysis": resp.summary,
@@ -169,12 +193,13 @@ async def analyze_archive(
         "risk_score": resp.risk_score,
         "risk_score_rationale": resp.risk_score_rationale,
         "duration_ms": resp.duration_ms,
-        "mode": "local Ollama + repository scan"
+        "mode": f"{get_configured_mode()} Ollama + repository scan"
     }
 
 
 @app.post("/api/analyze-local", response_model=CodeReviewResponse)
 def analyze_local(
+    req: Request,
     directory_path: str = Form(...),
     question: Optional[str] = Form("Review local repository directory"),
     analysis_type: str = Form("security"),
@@ -182,7 +207,14 @@ def analyze_local(
     severity_filter: str = Form("all"),
     model_name: Optional[str] = Form(None)
 ):
-    """Safely scans a local directory on disk without leaving system boundaries."""
+    """Scans a local directory on disk. Disabled in public cloud mode for server security."""
+    if IS_PUBLIC_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="Local server filesystem scanning is disabled in public cloud mode. Please upload a ZIP archive of your project instead."
+        )
+
+    limiter.check(req)
     files, scanned_names, skipped_names, redactions = scan_local_directory(directory_path)
     proj_name = Path(directory_path).name or "Local Directory"
     return analyze_repository_files(
@@ -204,14 +236,20 @@ def analyze_local(
 # ==========================================
 
 @app.post("/api/generate-fix", response_model=PatchPreview)
-def generate_fix(request: FixGenerationRequest):
+def generate_fix(request: FixGenerationRequest, req: Request):
     """Generates an actionable fix explanation, unified diff, and verification check."""
+    limiter.check(req)
     return generate_fix_preview(request)
 
 
 @app.post("/api/apply-patch", response_model=PatchApplyResponse)
 def apply_patch(request: PatchApplyRequest):
-    """Applies user-approved patch to disk with strict containment and rollback backup."""
+    """Applies user-approved patch to disk. Disabled in public mode to prevent server tampering."""
+    if IS_PUBLIC_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="Applying patches directly to the server filesystem is disabled in public cloud mode. Please copy the suggested fix and apply it on your local machine."
+        )
     return apply_patch_to_file(request)
 
 
@@ -220,8 +258,9 @@ def apply_patch(request: PatchApplyRequest):
 # ==========================================
 
 @app.post("/api/explain-error", response_model=ErrorExplanationResponse)
-def explain_runtime_error(request: ErrorExplanationRequest):
+def explain_runtime_error(request: ErrorExplanationRequest, req: Request):
     """Produces structured debugging analysis and test recommendations for errors."""
+    limiter.check(req)
     return explain_error(request)
 
 
@@ -230,8 +269,9 @@ def explain_runtime_error(request: ErrorExplanationRequest):
 # ==========================================
 
 @app.post("/api/git-review", response_model=GitDiffReviewResponse)
-def review_git_diff(request: GitDiffReviewRequest):
+def review_git_diff(request: GitDiffReviewRequest, req: Request):
     """Inspects changes introduced by Git commits or uncommitted diff."""
+    limiter.check(req)
     return analyze_git_diff(request)
 
 
@@ -240,8 +280,9 @@ def review_git_diff(request: GitDiffReviewRequest):
 # ==========================================
 
 @app.post("/api/scan-dependencies", response_model=DependencyScanResponse)
-def scan_project_dependencies(request: DependencyScanRequest):
+def scan_project_dependencies(request: DependencyScanRequest, req: Request):
     """Extracts manifest packages and optionally checks authoritative OSV advisory database."""
+    limiter.check(req)
     return scan_dependencies(request)
 
 
@@ -335,15 +376,23 @@ def compare_scans(scan_a_id: str = Form(...), scan_b_id: str = Form(...)):
 @app.get("/api/settings")
 def fetch_settings():
     return {
+        "mode": get_configured_mode(),
         "ollama_url": get_configured_ollama_url(),
         "default_model": get_configured_model(),
         "timeout": get_configured_timeout(),
+        "is_public_mode": IS_PUBLIC_MODE,
         "online_dependency_check": get_setting("enable_online_dep_check", "false") == "true"
     }
 
 
 @app.post("/api/settings")
 def update_settings(cfg: ConfigUpdate):
+    if IS_PUBLIC_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="Server settings cannot be altered via public web interface in public mode. Configure environment variables in the Render dashboard."
+        )
+
     if cfg.ollama_url is not None:
         set_setting("ollama_url", cfg.ollama_url.strip())
     if cfg.default_model is not None:
@@ -357,4 +406,6 @@ def update_settings(cfg: ConfigUpdate):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
+    uvicorn.run("app.main:app", host=host, port=port, reload=False)
